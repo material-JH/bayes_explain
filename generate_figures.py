@@ -2,14 +2,16 @@
 Generate all figures and animations for the Bayesian Optimization explainer.
 
 Produces:
-  images/01_blackbox_function.png    - Mystery function we want to optimize
-  images/02_gp_prior.png             - GP prior (before seeing data)
-  images/03_gp_posterior_1.png       - GP posterior after 1 observation
-  images/04_gp_posterior_3.png       - GP posterior after 3 observations
-  images/05_acquisition_function.png - Acquisition function (EI) with next query
+  images/01_blackbox_function.png        - Mystery function we want to optimize
+  images/02_gp_prior.png                 - GP prior (before seeing data)
+  images/03_gp_posterior_1.png           - GP posterior after 1 observation
+  images/04_gp_posterior_3.png           - GP posterior after 3 observations
+  images/05_acquisition_function.png     - Acquisition function (EI) with next query
   images/06_exploration_exploitation.png - Exploration vs exploitation trade-off
-  images/07_bo_loop.gif              - Full BO loop animation (step-by-step)
-  images/08_bo_final_result.png      - Final result after all iterations
+  images/07_bo_loop_success.gif          - BO loop finding global minimum (success)
+  images/08_bo_success_result.png        - Final result of success run
+  images/09_bo_loop_local.gif            - BO loop stuck at local minimum (failure)
+  images/10_bo_local_result.png          - Final result of failure run
 """
 
 import numpy as np
@@ -397,18 +399,11 @@ def fig06_exploration_exploitation():
 
 
 # ---------------------------------------------------------------------------
-# Figure 7: Animated BO loop (GIF)
+# Figure 7-10: Parameterized BO loop GIF + final result
 # ---------------------------------------------------------------------------
-def fig07_bo_loop_gif():
-    np.random.seed(7)
-    # Start with 2 initial random observations
-    X_init = np.array([0.5, 4.5])
-    Y_init = true_function(X_init)
-
+def _bo_loop_gif(X_init, n_iters, gif_path, label_prefix, fig_num_label):
     X_obs = X_init.copy()
-    Y_obs = Y_init.copy()
-
-    n_iters = 8
+    Y_obs = true_function(X_obs)
     frames = []
 
     for it in range(n_iters + 1):
@@ -420,7 +415,6 @@ def fig07_bo_loop_gif():
         y_best = Y_obs.min()
         ei = expected_improvement(mu, std, y_best)
 
-        # Top: surrogate
         ax1.plot(
             X_PLOT,
             Y_TRUE,
@@ -449,7 +443,6 @@ def fig07_bo_loop_gif():
             linewidths=1,
         )
 
-        # Highlight current best
         best_idx = np.argmin(Y_obs)
         ax1.scatter(
             X_obs[best_idx],
@@ -468,14 +461,15 @@ def fig07_bo_loop_gif():
             next_x = X_PLOT[next_x_idx]
             ax1.axvline(next_x, color=COLORS["next"], ls="--", lw=1.8, alpha=0.6)
             ax1.set_title(
-                f"Iteration {it + 1}/{n_iters} — Querying $x = {next_x:.2f}$",
-                fontsize=15,
+                f"{label_prefix} — Iter {it + 1}/{n_iters} — "
+                f"Querying $x = {next_x:.2f}$",
+                fontsize=14,
             )
         else:
             ax1.set_title(
-                f"Done! Best found at $x = {X_obs[best_idx]:.2f}$,  "
+                f"{label_prefix} — Done! Best at $x = {X_obs[best_idx]:.2f}$,  "
                 f"$f(x) = {Y_obs[best_idx]:.2f}$",
-                fontsize=15,
+                fontsize=14,
             )
 
         ax1.set_ylabel("$f(x)$")
@@ -483,7 +477,6 @@ def fig07_bo_loop_gif():
         ax1.set_xlim(0, 6)
         ax1.set_ylim(min(Y_TRUE) - 1.5, max(Y_TRUE) + 1.5)
 
-        # Bottom: EI
         ax2.fill_between(X_PLOT, 0, ei, alpha=0.3, color=COLORS["acq"])
         ax2.plot(X_PLOT, ei, color=COLORS["acq"], lw=2)
         if it < n_iters:
@@ -503,38 +496,30 @@ def fig07_bo_loop_gif():
 
         fig.tight_layout()
 
-        # Render to PIL Image
         buf = io.BytesIO()
         fig.savefig(buf, format="png")
         buf.seek(0)
         frames.append(Image.open(buf).copy())
         plt.close(fig)
 
-        # Add next observation for next iteration
         if it < n_iters:
             next_x_val = X_PLOT[next_x_idx]
             X_obs = np.append(X_obs, next_x_val)
             Y_obs = np.append(Y_obs, true_function(next_x_val))
 
-    # Duplicate last frame so it lingers
     frames += [frames[-1]] * 3
-
     frames[0].save(
-        f"{OUT}/07_bo_loop.gif",
+        gif_path,
         save_all=True,
         append_images=frames[1:],
         duration=1500,
         loop=0,
     )
-    print("  [7/8] 07_bo_loop.gif")
+    print(f"  [{fig_num_label}] {os.path.basename(gif_path)}")
+    return X_obs, Y_obs
 
-    return X_obs, Y_obs  # for the final result figure
 
-
-# ---------------------------------------------------------------------------
-# Figure 8: Final result
-# ---------------------------------------------------------------------------
-def fig08_final_result(X_obs, Y_obs):
+def _bo_final_result(X_obs, Y_obs, png_path, title, fig_num_label):
     mu, std = gp_posterior(X_obs, Y_obs, X_PLOT)
 
     fig, ax = plt.subplots(figsize=(9, 5))
@@ -549,7 +534,6 @@ def fig08_final_result(X_obs, Y_obs):
         label="95% CI",
     )
 
-    # Plot all observations with iteration numbers
     for i, (xi, yi) in enumerate(zip(X_obs, Y_obs)):
         ax.scatter(
             xi, yi, s=80, zorder=5, color=COLORS["obs"], edgecolors="k", linewidths=1
@@ -564,7 +548,6 @@ def fig08_final_result(X_obs, Y_obs):
             color=COLORS["obs"],
         )
 
-    # Highlight best
     best_idx = np.argmin(Y_obs)
     ax.scatter(
         X_obs[best_idx],
@@ -578,7 +561,6 @@ def fig08_final_result(X_obs, Y_obs):
         label=f"Best: $x$={X_obs[best_idx]:.2f}, $f$={Y_obs[best_idx]:.2f}",
     )
 
-    # True global min
     true_min_idx = np.argmin(Y_TRUE)
     ax.scatter(
         X_PLOT[true_min_idx],
@@ -594,13 +576,13 @@ def fig08_final_result(X_obs, Y_obs):
 
     ax.set_xlabel("$x$")
     ax.set_ylabel("$f(x)$")
-    ax.set_title("Final Result — Bayesian Optimization found the minimum!")
+    ax.set_title(title)
     ax.legend(loc="upper left", fontsize=10)
     ax.set_xlim(0, 6)
     fig.tight_layout()
-    fig.savefig(f"{OUT}/08_bo_final_result.png")
+    fig.savefig(png_path)
     plt.close(fig)
-    print("  [8/8] 08_bo_final_result.png")
+    print(f"  [{fig_num_label}] {os.path.basename(png_path)}")
 
 
 # ---------------------------------------------------------------------------
@@ -614,6 +596,35 @@ if __name__ == "__main__":
     fig04_posterior_3()
     fig05_acquisition()
     fig06_exploration_exploitation()
-    X_obs, Y_obs = fig07_bo_loop_gif()
-    fig08_final_result(X_obs, Y_obs)
+
+    X_s, Y_s = _bo_loop_gif(
+        X_init=np.array([2.0, 5.5]),
+        n_iters=8,
+        gif_path=f"{OUT}/07_bo_loop_success.gif",
+        label_prefix="Success",
+        fig_num_label="7/10",
+    )
+    _bo_final_result(
+        X_s,
+        Y_s,
+        png_path=f"{OUT}/08_bo_success_result.png",
+        title="Success — BO found the global minimum!",
+        fig_num_label="8/10",
+    )
+
+    X_f, Y_f = _bo_loop_gif(
+        X_init=np.array([0.5, 4.5]),
+        n_iters=8,
+        gif_path=f"{OUT}/09_bo_loop_local.gif",
+        label_prefix="Local minimum",
+        fig_num_label="9/10",
+    )
+    _bo_final_result(
+        X_f,
+        Y_f,
+        png_path=f"{OUT}/10_bo_local_result.png",
+        title="Stuck — BO converged to a local minimum",
+        fig_num_label="10/10",
+    )
+
     print(f"\nDone! All figures saved to '{OUT}/'")
