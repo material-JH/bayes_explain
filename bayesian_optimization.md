@@ -138,15 +138,27 @@ The Expected Improvement naturally balances both: it's high where the GP mean is
 
 Watch Bayesian Optimization find the minimum step by step:
 
-![Bayesian Optimization Loop](images/07_bo_loop.gif)
+![Bayesian Optimization Loop — Success](images/07_bo_loop_success.gif)
 
-*Starting with 2 random points, the optimizer alternates between updating the surrogate and querying the most promising location. Notice how the confidence band shrinks as more data arrives.*
+*Starting with 2 initial points, the optimizer alternates between updating the surrogate and querying the most promising location. Notice how the confidence band shrinks as more data arrives, and the ★ converges toward the true minimum.*
 
-### After all iterations:
+### Result:
 
-![Final Result](images/08_bo_final_result.png)
+![Success Result](images/08_bo_success_result.png)
 
-*Numbers show the evaluation order. The ★ marks the best found, the ◆ marks the true global minimum. In this run, BO found a strong local minimum — but missed the global one in the far right. This is realistic: with limited evaluations, BO can get trapped near a local optimum. More initial exploration or additional iterations would help it discover the deeper valley.*
+*Numbers show the evaluation order. The ★ marks the best found, the ◆ the true global minimum. BO found a value very close to the true optimum — in just 10 evaluations!*
+
+### ⚠️ But it doesn't always work perfectly...
+
+Different initial samples can lead to very different outcomes. Here's the **same algorithm**, but with different starting points:
+
+![Bayesian Optimization Loop — Local Minimum](images/09_bo_loop_local.gif)
+
+![Local Minimum Result](images/10_bo_local_result.png)
+
+*This time, BO got trapped near a **local minimum** around x ≈ 1.7 and never explored the deeper valley on the right (x ≈ 5.7). With limited evaluations, the acquisition function didn't see enough incentive to explore that far-away region.*
+
+**Key takeaway**: Bayesian Optimization is powerful but not infallible. Initial point placement, the number of iterations, and the exploration-exploitation balance all matter. In practice, starting with a diverse set of initial samples (e.g., using Latin Hypercube Sampling) helps avoid this trap.
 
 ---
 
